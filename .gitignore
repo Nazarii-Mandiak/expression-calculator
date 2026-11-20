@@ -486,3 +486,4 @@ $RECYCLE.BIN/
 private/
 *.pdf
 !docs/DESIGN.pdf
+!.claude/skills/publish/

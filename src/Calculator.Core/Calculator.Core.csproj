@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure calculation engine: no I/O, no third-party dependencies, trimming/AOT safe. -->
+  <PropertyGroup>
+    <RootNamespace>Calculator.Core</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Calculator.Core.Tests" />
+  </ItemGroup>
+</Project>
