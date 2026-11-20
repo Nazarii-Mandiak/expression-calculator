@@ -75,8 +75,38 @@ Errors (`CalculationException`):
 | `* 3` | MissingOperand | 0 | 1 | |
 | `10 20` | MissingOperator | 3 | 2 | |
 
-`Parse(null)` throws `ArgumentNullException`. A syntax error is always reported even if an earlier
-part would fail at evaluation (`1/0 +` → MissingOperand, not DivisionByZero).
+More valid input:
+
+| Input | `ToString()` |
+|-------|--------------|
+| `-0` | `0` |
+| `007` | `7` |
+| `0.0000000000000000000000000001` (28 decimals, exactly representable) | `0.0000000000000000000000000001` |
+| 50,000 operands (`1 + 1 + … + 1`) | parses without error (no stack overflow) |
+| 10,000 unary minus signs followed by `5` | `5` |
+
+More errors:
+
+| Input | Code | Position | Length | Message must mention |
+|-------|------|----------|--------|----------------------|
+| `0.00000000000000000000000000001` (29 decimals) | InvalidNumber | 0 | 31 | exactly |
+| `1.00000000000000000000000000001` | InvalidNumber | 0 | 31 | exactly |
+| `1 .5` | MissingOperator | 2 | 2 | |
+| `* a` | MissingOperand | 0 | 1 | |
+| `10 * / 2 a` | MissingOperand | 5 | 1 | |
+
+Rules:
+
+- `Parse(null)` throws `ArgumentNullException`.
+- **The leftmost error wins**: input is validated left to right and the first problem is reported,
+  whether it is a bad character, a bad number or a grammar error.
+- **No silent rounding**: a literal that `decimal` cannot represent exactly (more significant or
+  fractional digits than it can hold) is rejected as InvalidNumber, never rounded.
+- A syntax error is always reported even if an earlier part would fail at evaluation (`1/0 +` →
+  MissingOperand, not DivisionByZero).
+- The `1,5` message must contain `'.'` (the quoted decimal point), not just a full stop.
+- Error messages never echo more than about 20 characters of user input, and control or invisible
+  characters are shown as `U+XXXX`; a surrogate pair (e.g. an emoji) is one character with Length 2.
 
 ## F2 — Evaluate and format (R3, R4, R5) · `Expression.Evaluate`, `NumberFormatter.Format`
 
