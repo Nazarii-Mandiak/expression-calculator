@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 
 namespace Calculator.Core;
 
@@ -10,9 +9,6 @@ namespace Calculator.Core;
 /// </summary>
 public sealed class Expression
 {
-    // Optional digits drop trailing zeros; 28 is the most fractional digits a decimal can hold.
-    private const string NumberPattern = "0.############################";
-
     private readonly Node _root;
 
     private Expression(Node root) => _root = root;
@@ -32,9 +28,13 @@ public sealed class Expression
     /// Evaluates the expression with standard precedence (<c>*</c> and <c>/</c> before <c>+</c> and <c>-</c>),
     /// left to right within the same precedence level.
     /// </summary>
+    /// <remarks>
+    /// Literals are exact. Each operation's result keeps <see cref="decimal"/>'s 28-29 significant digits,
+    /// so results below 1e-28 become 0. Only overflow is an error.
+    /// </remarks>
     /// <returns>The value plus every binary operation performed, in evaluation order.</returns>
     /// <exception cref="CalculationException">Division by zero or arithmetic overflow.</exception>
-    public Evaluation Evaluate() => throw new NotImplementedException();
+    public Evaluation Evaluate() => Evaluator.Evaluate(_root);
 
     /// <summary>Returns the canonical form, e.g. <c>10 - 2 * 6 / 4</c> (single spaces, ASCII operators).</summary>
     /// <returns>The canonical expression text.</returns>
@@ -42,7 +42,7 @@ public sealed class Expression
 
     private static string Format(Node node) => node switch
     {
-        NumberNode number => number.Value.ToString(NumberPattern, CultureInfo.InvariantCulture),
+        NumberNode number => NumberFormatter.ToPlainText(number.Value),
         ChainNode chain => string.Concat(
             Format(chain.First),
             string.Concat(chain.Rest.Select(link => $" {Symbol(link.Operator)} {Format(link.Operand)}"))),

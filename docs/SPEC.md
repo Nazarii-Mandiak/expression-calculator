@@ -148,7 +148,37 @@ zeros, exponent or group separators):
 | `79228162514264337593543950335m` | `79228162514264337593543950335` |
 | `12345678901234567890.123456789m` | `12345678901234567890.12346` |
 
-Formatting must not depend on `CultureInfo.CurrentCulture` (verified under `uk-UA` and `de-DE`).
+More evaluation rows:
+
+| Input | Expected |
+|-------|----------|
+| `79228162514264337593543950335 / 0.5` | Overflow at 30, length 1 |
+| `-79228162514264337593543950335 - 1` | Overflow at 31, length 1 |
+| `5 / -0` | DivisionByZero at 2, length 1 |
+| `0.0000000000000001 * 0.0000000000000001` | value `0` (underflow, see rules) |
+
+More formatting rows:
+
+| Value | Text | Why |
+|-------|------|-----|
+| `1234567890123456789012344.5m` | `1234567890123456789012345` | midpoint rounds away from zero (not to even) |
+| `-0.00000000000000000000000025m` | `-0.0000000000000000000000003` | negative midpoint |
+| `-12345678901234567890.123456789m` | `-12345678901234567890.12346` | sign does not count as a digit |
+| `9.999999999999999999999999999m` | `10` | carry into a new integer digit |
+| `0.9999999999999999999999999999m` | `1` | |
+| `7922816251426433759354395033.5m` | `7922816251426433759354395034` | near the top of the range |
+| `0.0000000000000000000000000001m` | `0.0000000000000000000000000001` | a non-zero value is never shown as `0` |
+| `-0.0000000000000000000000000001m` | `-0.0000000000000000000000000001` | same, negative |
+
+Rules:
+
+- **Literals are exact; results are rounded by `decimal`.** Each operation's result keeps decimal's
+  28–29 significant digits, so a result smaller than 1e-28 becomes `0` and digits beyond that
+  precision are lost. Only overflow is an error. (A divisor is always a literal in this grammar, so an
+  underflowed intermediate can never cause a false division-by-zero.)
+- **A non-zero value is never displayed as `0`**: if display rounding would produce zero, the exact
+  value is printed instead.
+- Formatting must not depend on `CultureInfo.CurrentCulture` (verified under `uk-UA` and `de-DE`).
 
 ## F3 — Natural-language translation (R6, R9) · `NaturalLanguage.TryTranslate`
 
