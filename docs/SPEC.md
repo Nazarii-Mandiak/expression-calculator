@@ -200,6 +200,17 @@ evaluates or validates arithmetic (the parser does).
 | `subtract 2 from 10` | false (word order changes are not supported) |
 | `ten plus two` | false |
 | `` (empty) | false |
+| `what is 2+2?` | `2+2` (symbol runs pass through unchanged; the parser normalises them) |
+| `what is 10-2*6/4` | `10-2*6/4` |
+| `what is -5 plus 3` | `-5 + 3` |
+| `what is 2 × 3` | `2 × 3` |
+| `What’s 3 plus 4` (typographic apostrophe) | `3 + 4` |
+| `what is 2 plus 3\n` (trailing newline) and NBSP between words | `2 + 3` |
+| `what is 1.2.3 plus 1` | `1.2.3 + 1` (the parser reports the InvalidNumber with its position) |
+
+Any token made only of digits, `.` and operator symbols (including the aliases) is passed through
+untouched; the translator does not check whether it is a valid number. Words are separated by any
+whitespace. Only one trailing `?` or `.` is removed.
 
 ## F4 — Property and differential tests (R3, R4, R7) · tests only
 
