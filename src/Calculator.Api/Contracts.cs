@@ -46,9 +46,22 @@ public sealed record ValidationResponse(
 /// <param name="Message">Human-readable description.</param>
 public sealed record ValidationError(string ErrorCode, int Position, int Length, string Message);
 
+/// <summary>Body of <c>POST /v1/evaluations/natural-language</c>.</summary>
+/// <param name="Question">The question in plain English, e.g. <c>What is 3 plus 4?</c>.</param>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record NaturalLanguageRequest(string Question);
+
+/// <summary>Result of a natural-language question.</summary>
+/// <param name="InterpretedExpression">The expression text the question was turned into; error positions refer to it.</param>
+/// <param name="Result">The formatted result.</param>
+/// <param name="Interpreter">Who produced the expression: <c>rules</c> or <c>llm</c>.</param>
+public sealed record NaturalLanguageResponse(string InterpretedExpression, string Result, string Interpreter);
+
 /// <summary>Build-time JSON metadata for the REST bodies and MCP tool results; MCP tool discovery still uses reflection.</summary>
 [JsonSerializable(typeof(EvaluationRequest))]
 [JsonSerializable(typeof(EvaluationResponse))]
 [JsonSerializable(typeof(ValidationRequest))]
 [JsonSerializable(typeof(ValidationResponse))]
+[JsonSerializable(typeof(NaturalLanguageRequest))]
+[JsonSerializable(typeof(NaturalLanguageResponse))]
 internal sealed partial class ApiJsonContext : JsonSerializerContext;

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -27,7 +28,12 @@ internal static class ApiClient
 internal sealed record ApiResponse(HttpStatusCode Status, string? MediaType, string Body)
 {
     public static async Task<ApiResponse> ReadAsync(HttpResponseMessage response) =>
-        new(response.StatusCode, response.Content.Headers.ContentType?.MediaType, await response.Content.ReadAsStringAsync());
+        new(response.StatusCode, response.Content.Headers.ContentType?.MediaType, await response.Content.ReadAsStringAsync())
+        {
+            RetryAfter = response.Headers.RetryAfter,
+        };
+
+    public RetryConditionHeaderValue? RetryAfter { get; init; }
 
     /// <summary>The parsed body; property lookups are case-sensitive, so camelCase names are asserted exactly.</summary>
     public JsonElement Json => JsonDocument.Parse(Body).RootElement;

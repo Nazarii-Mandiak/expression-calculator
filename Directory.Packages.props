@@ -6,6 +6,7 @@
   <ItemGroup Label="Service host (Calculator.Api only)">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="11.0.1" />
   </ItemGroup>
   <ItemGroup Label="Tests only">
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />

@@ -345,6 +345,30 @@ Streamable HTTP transport). Deployments override the allowed hosts through confi
    for `{"expression": "..."}`; `interpreter` is `llm`.
 3. The candidate must be ≤ 1,000 characters and pass `Expression.Parse`; only then is it evaluated.
 
+Seam and limits: the LLM fallback is used only when an `IChatClient` (Microsoft.Extensions.AI) is
+registered — the app registers one when `Llm:Endpoint` and `Llm:Model` are configured; tests register
+a fake. The LLM is asked for a JSON object `{"expression": "..."}`; anything else is Uninterpretable.
+`question` follows the same request rules as F7 (400 for missing/non-string/unknown members, 422
+`InputTooLong` over 1,000 characters). An LLM failure (exception or timeout) is a 503 Problem Details,
+never a 500, and never falls back to evaluating raw model text.
+Parser errors on an interpreted expression report `position`/`length` within `interpretedExpression`
+(not within the question). The LLM timeout is configured with `Llm:TimeoutSeconds` (default 10).
+
+More rules (after review):
+
+- Configuring `Llm:Endpoint` + `Llm:Model` without an API key is valid (local Ollama); rules-path
+  questions still return 200 and an unreachable LLM returns 503 — never 500.
+- A malformed `Llm:Endpoint` fails application startup (options validation), not individual requests.
+- The question is sent only as a user-role message; the system prompt treats it as untrusted data and
+  instructs the model never to compute, simplify or rearrange, returning `{"expression": null}` for
+  anything needing grouping, powers, percentages or functions.
+- A 422 for an interpreted expression includes `interpretedExpression` and `interpreter` so clients can
+  map `position`/`length`.
+- An over-long question says "A question may have at most 1000 characters." The Uninterpretable
+  detail asks the user to rephrase and does not reveal configuration keys.
+- 429 responses carry `Retry-After`. Model calls are capped (max output tokens, no client retries).
+- The API key is never stored in committed configuration (user-secrets / `Llm__ApiKey`).
+
 | Case | Response |
 |------|----------|
 | `What is 10 minus 2 multiplied by 6 divided by 4?` | 200 `{"interpretedExpression":"10 - 2 * 6 / 4","result":"7","interpreter":"rules"}` |
