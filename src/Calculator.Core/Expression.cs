@@ -45,16 +45,7 @@ public sealed class Expression
         NumberNode number => NumberFormatter.ToPlainText(number.Value),
         ChainNode chain => string.Concat(
             Format(chain.First),
-            string.Concat(chain.Rest.Select(link => $" {Symbol(link.Operator)} {Format(link.Operand)}"))),
-        _ => throw new UnreachableException(),
-    };
-
-    private static char Symbol(BinaryOperator op) => op switch
-    {
-        BinaryOperator.Add => '+',
-        BinaryOperator.Subtract => '-',
-        BinaryOperator.Multiply => '*',
-        BinaryOperator.Divide => '/',
+            string.Concat(chain.Rest.Select(link => $" {link.Operator.ToSymbol()} {Format(link.Operand)}"))),
         _ => throw new UnreachableException(),
     };
 }

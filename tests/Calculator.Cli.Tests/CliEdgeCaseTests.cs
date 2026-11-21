@@ -47,13 +47,15 @@ public sealed class CliEdgeCaseTests
 
     [Fact]
     [Trait("Requirement", "R1")]
-    [Trait("Feature", "F5")]
-    public void Run_NoArgumentsAndInputNotRedirected_ExitsTwoWithEmptyStdout()
+    [Trait("Requirement", "R6")]
+    [Trait("Feature", "F6")]
+    public void Run_NoArgumentsAndInputNotRedirected_StartsInteractiveSession()
     {
         var result = CliRunner.Run([], stdin: "", isInputRedirected: false);
 
-        Assert.Equal(CliApp.UsageError, result.ExitCode);
-        Assert.Equal("", result.Stdout);
+        Assert.Equal(CliApp.Success, result.ExitCode);
+        Assert.StartsWith("> ", result.StdoutAfterBanner, StringComparison.Ordinal);
+        Assert.Equal("", result.Stderr);
     }
 
     [Fact]
