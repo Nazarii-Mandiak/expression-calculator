@@ -243,6 +243,28 @@ whitespace. Only one trailing `?` or `.` is removed.
 | `printf '1+2\n\n# c\n10/0\n' \| calc` | `3` | `line 4: ` + error format | 1 |
 | `calc --bogus` | | usage text | 2 |
 
+More rules and rows:
+
+- An argument is an option only if it is `-` or `--` followed by a letter (`-e`, `--help`, `--bogus`).
+  Everything else is part of the expression: `calc "- 5"` → `-5`, `calc --5` → `5`, `calc 5 --3` → `8`,
+  `calc -` → MissingOperand, exit 1.
+- The echoed input line is terminal-safe and keeps columns aligned: a tab is shown as a space and a
+  control or format character as `?` (one character per character, so the caret stays aligned).
+- Batch lines longer than 10,000 characters are rejected as `line N: error[InputTooLong]: …` (exit 1,
+  processing continues). A UTF-8 byte-order mark at the start of the first line is ignored.
+- When a natural-language question translates but the translation does not parse, stderr shows
+  `interpreted as: <translated text>` before the error block (e.g. `What is 10 minus` → `10 -`,
+  MissingOperand, caret after `-`).
+- With no arguments and stdin not redirected, F5 alone exits 2 with usage (F6 replaces this with the
+  interactive mode).
+
+| Invocation | stdout | stderr | Exit |
+|------------|--------|--------|------|
+| `printf '1\t+\t2 +\n' \| calc` | | caret under end of input, aligned with the echoed spaces | 1 |
+| `calc "2 + 3 $(printf '\033')[31m x"` | | echo shows `?` for ESC; no raw control characters on stderr | 1 |
+| `printf '\xEF\xBB\xBF1+2\n' \| calc` | `3` | | 0 |
+| `calc 1 --x` | | usage | 2 |
+
 Error format (two-space indent, caret under the offending span, `^` repeated `Length` times):
 ```
 error[MissingOperand]: expected a number after '+'
