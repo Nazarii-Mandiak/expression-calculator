@@ -46,7 +46,7 @@ public sealed record ValidationResponse(
 /// <param name="Message">Human-readable description.</param>
 public sealed record ValidationError(string ErrorCode, int Position, int Length, string Message);
 
-/// <summary>Reflection-free JSON metadata, generated at build time (trim/AOT safe).</summary>
+/// <summary>Build-time JSON metadata for the REST bodies and MCP tool results; MCP tool discovery still uses reflection.</summary>
 [JsonSerializable(typeof(EvaluationRequest))]
 [JsonSerializable(typeof(EvaluationResponse))]
 [JsonSerializable(typeof(ValidationRequest))]

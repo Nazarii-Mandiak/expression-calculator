@@ -317,11 +317,24 @@ More rules (verified in the Production environment, not Development):
 
 | Tool | Input | Output |
 |------|-------|--------|
-| `evaluate_expression` | `expression` (string) | text `7` plus structured `{expression, result, steps}`; errors as tool errors with code and position |
+| `evaluate_expression` | `expression` (string) | structured content `{expression, result, steps}` (the text block carries the same JSON, so it contains `7`); errors are MCP tool errors (`isError`) whose text names the error code and position |
 | `validate_expression` | `expression` | `{valid, canonical?, error?}` |
 
 Tool descriptions tell the host model to translate the user's words into an expression using only
-`+ - * /` and to never compute the answer itself.
+`+ - * /` and to never compute the answer itself; unsupported questions (grouping, powers, percentages)
+must be reported as unsupported, never rearranged or partly computed by the model.
+
+More rows:
+
+| Call | Result |
+|------|--------|
+| `evaluate_expression` / `validate_expression` with 1,001 characters | tool error text contains `InputTooLong` and `index 1000` |
+| either tool with `"expression": null` | tool error text contains `MissingExpression` (no generic error) |
+| `evaluate_expression` `10 + * 3` | tool error text contains `MissingOperand`, `index 5` and `length 1` (positions are zero-based) |
+
+Security: the PoC has no authentication and is meant for local use; requests whose `Host` is not
+`localhost`/`127.0.0.1`/`[::1]` are rejected (DNS-rebinding protection required by the MCP
+Streamable HTTP transport). Deployments override the allowed hosts through configuration.
 
 ## F9 — Natural-language endpoint with validated LLM fallback (R9)
 

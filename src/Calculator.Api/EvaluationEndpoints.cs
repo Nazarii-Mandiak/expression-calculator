@@ -7,9 +7,6 @@ namespace Calculator.Api;
 /// <summary>The <c>/v1/evaluations</c> endpoints: thin adapters over <see cref="Expression"/>.</summary>
 internal static class EvaluationEndpoints
 {
-    internal const int MaxExpressionLength = 1_000;
-    internal const int MaxBodyBytes = 16 * 1024;
-
     public static IEndpointRouteBuilder MapEvaluationEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/v1/evaluations")
@@ -30,17 +27,14 @@ internal static class EvaluationEndpoints
 
     private static Results<Ok<EvaluationResponse>, ProblemHttpResult> Evaluate(EvaluationRequest request)
     {
-        if (request.Expression.Length > MaxExpressionLength)
+        if (request.Expression.Length > ResponseMapper.MaxExpressionLength)
         {
             return TooLong(request.Expression);
         }
 
         try
         {
-            var expression = Expression.Parse(request.Expression);
-            var evaluation = expression.Evaluate();
-            var steps = request.Explain ? evaluation.Steps.Select(ToDto).ToList() : null;
-            return TypedResults.Ok(new EvaluationResponse(expression.ToString(), NumberFormatter.Format(evaluation.Value), steps));
+            return TypedResults.Ok(ResponseMapper.Evaluate(request.Expression, request.Explain));
         }
         catch (CalculationException ex)
         {
@@ -50,33 +44,16 @@ internal static class EvaluationEndpoints
 
     private static Results<Ok<ValidationResponse>, ProblemHttpResult> Validate(ValidationRequest request)
     {
-        if (request.Expression.Length > MaxExpressionLength)
-        {
-            return TooLong(request.Expression);
-        }
-
-        try
-        {
-            return TypedResults.Ok(new ValidationResponse(true, Expression.Parse(request.Expression).ToString(), null));
-        }
-        catch (CalculationException ex)
-        {
-            var error = new ValidationError(ex.Code.ToString(), ex.Position, ex.Length, ex.Message);
-            return TypedResults.Ok(new ValidationResponse(false, null, error));
-        }
+        return request.Expression.Length > ResponseMapper.MaxExpressionLength
+            ? TooLong(request.Expression)
+            : TypedResults.Ok(ResponseMapper.Validate(request.Expression));
     }
 
     private static ProblemHttpResult TooLong(string expression) => Invalid(
         "InputTooLong",
-        $"An expression may have at most {MaxExpressionLength} characters.",
-        MaxExpressionLength,
-        expression.Length - MaxExpressionLength);
-
-    private static StepDto ToDto(EvaluationStep step) => new(
-        NumberFormatter.Format(step.Left),
-        step.Operator.ToSymbol().ToString(),
-        NumberFormatter.Format(step.Right),
-        NumberFormatter.Format(step.Result));
+        ResponseMapper.TooLongMessage,
+        ResponseMapper.MaxExpressionLength,
+        expression.Length - ResponseMapper.MaxExpressionLength);
 
     // The one place that builds a 422, so every invalid-expression problem has the same shape.
     private static ProblemHttpResult Invalid(string errorCode, string detail, int position, int length) => TypedResults.Problem(

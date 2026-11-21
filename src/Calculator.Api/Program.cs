@@ -1,6 +1,10 @@
+using System.Text.Json;
+
 using Calculator.Api;
 
 using Microsoft.AspNetCore.Http.Features;
+
+using ModelContextProtocol;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
@@ -15,6 +19,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.RespectRequiredConstructorParameters = true;
 });
 
+// Proof of concept: REST and MCP share one host. The tools are pure, so stateless HTTP needs no sessions.
+var mcpJson = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions);
+mcpJson.TypeInfoResolverChain.Insert(0, ApiJsonContext.Default);
+builder.Services.AddMcpServer().WithHttpTransport(options => options.Stateless = true).WithTools<CalculatorTools>(mcpJson);
+
 var app = builder.Build();
 // First, so an unexpected exception anywhere below becomes a 500 Problem Details response.
 app.UseExceptionHandler();
@@ -26,12 +35,12 @@ app.Use((context, next) =>
     var limit = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
     if (limit is { IsReadOnly: false })
     {
-        limit.MaxRequestBodySize = EvaluationEndpoints.MaxBodyBytes;
+        limit.MaxRequestBodySize = ResponseMapper.MaxBodyBytes;
     }
 
     // Known limit: TestServer has no server-level limit, so this Content-Length check is the test-host
     // ceiling; real servers enforce the feature above, also for bodies without a Content-Length.
-    if (context.Request.ContentLength > EvaluationEndpoints.MaxBodyBytes)
+    if (context.Request.ContentLength > ResponseMapper.MaxBodyBytes)
     {
         context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
         return Task.CompletedTask;
@@ -42,6 +51,7 @@ app.Use((context, next) =>
 app.MapOpenApi();
 app.MapHealthChecks("/health");
 app.MapEvaluationEndpoints();
+app.MapMcp("/mcp");
 app.Run();
 
 /// <summary>Entry point; public so integration tests can host the app with WebApplicationFactory.</summary>
