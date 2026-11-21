@@ -1,4 +1,43 @@
-@Calculator.Api_HostAddress = http://localhost:5080
+@host = http://localhost:5080
 
-### Endpoints are added in features F7-F9
-GET {{Calculator.Api_HostAddress}}/openapi/v1.json
+### Evaluate
+POST {{host}}/v1/evaluations
+Content-Type: application/json
+
+{ "expression": "10 - 2 * 6 / 4" }
+
+### Explain: lists every step
+POST {{host}}/v1/evaluations
+Content-Type: application/json
+
+{ "expression": "10 - 2 * 6 / 4", "explain": true }
+
+### Division by zero: 422 with errorCode, position and length
+POST {{host}}/v1/evaluations
+Content-Type: application/json
+
+{ "expression": "10 / 0" }
+
+### Validate a valid expression
+POST {{host}}/v1/evaluations/validate
+Content-Type: application/json
+
+{ "expression": "10-2" }
+
+### Validate an invalid expression
+POST {{host}}/v1/evaluations/validate
+Content-Type: application/json
+
+{ "expression": "10 + * 3" }
+
+### Missing expression: 400 Problem Details
+POST {{host}}/v1/evaluations
+Content-Type: application/json
+
+{}
+
+### Health
+GET {{host}}/health
+
+### OpenAPI document
+GET {{host}}/openapi/v1.json

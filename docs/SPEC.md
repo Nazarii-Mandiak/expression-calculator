@@ -305,6 +305,14 @@ error[MissingOperand]: expected a number after '+'
 
 Results and step values are strings (precision-safe for JavaScript clients).
 
+More rules (verified in the Production environment, not Development):
+
+- Every error response is `application/problem+json` (400, 413, 422 and any unexpected 500) with
+  `status`, `title`, `instance` (`<METHOD> <path>`) and `traceId`.
+- `InputTooLong` also carries `position` 1000 and `length` = characters beyond the limit.
+- Unknown JSON members are rejected with 400 (`{"expression":"1+1","explian":true}`).
+- The OpenAPI document declares 200, 400, 413 and 422 responses for both endpoints.
+
 ## F8 — MCP tools (R9) · `/mcp` (Streamable HTTP)
 
 | Tool | Input | Output |

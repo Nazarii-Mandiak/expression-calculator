@@ -31,6 +31,8 @@ Rules:
 - Tag every test with `[Trait("Requirement", "R<n>")]` and `[Trait("Feature", "F<n>")]`.
 - Naming: `Subject_Condition_ExpectedOutcome`. No logic (loops/ifs) in test bodies except in the
   dedicated property/differential test classes. Plain xUnit `Assert` only.
+- Run `dotnet format Calculator.slnx --include tests/` so the tests are already formatted when they
+  are locked (the implementer is not allowed to touch them, not even through a formatter).
 - Finish by running `dotnet test` and confirming the new tests FAIL for the right reason
   (`NotImplementedException` or a wrong value), not because of compile errors.
 

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <RootNamespace>Calculator.Api</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <ContainerRepository>expression-calculator-api</ContainerRepository>
   </PropertyGroup>
   <ItemGroup>

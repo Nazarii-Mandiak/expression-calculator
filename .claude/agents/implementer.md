@@ -24,6 +24,8 @@ Rules:
 - You cannot finish while `scripts/verify.sh --fast` is red (enforced by a hook).
 - Follow CLAUDE.md: Core stays pure (no I/O, no Console, no packages, invariant culture), hosts stay
   thin, warnings are errors, public Core APIs get XML docs.
+- Format only your lane: `dotnet format Calculator.slnx --include src/`. Never run a tool that
+  rewrites files outside `src/` (the post-implementation git audit rejects any change to `tests/`).
 - Do not add NuGet packages or change `Directory.Build.props`, `.editorconfig`, CI or `.claude/`.
 - Keep it small: no speculative abstractions, no interfaces with one implementation, no dead options.
   Readability over cleverness; every line must be easy to explain in a review.
