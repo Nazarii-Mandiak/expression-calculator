@@ -28,7 +28,8 @@ indent_size = 2
 indent_size = 4
 tab_width = 4
 
-# New line preferences
+# New line preferences (LF everywhere, matching .gitattributes; without it, dotnet format on Windows expects CRLF)
+end_of_line = lf
 insert_final_newline = true
 
 #### .NET Coding Conventions ####
