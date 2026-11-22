@@ -180,4 +180,25 @@ public sealed class McpEndpointTests(ProductionApiFactory factory) : IClassFixtu
         Assert.Equal("MissingOperand", structured.GetProperty("error").GetProperty("errorCode").GetString());
         Assert.Equal(5, structured.GetProperty("error").GetProperty("position").GetInt32());
     }
+
+    [Theory]
+    [Trait("Requirement", "R9")]
+    [Trait("Requirement", "R5")]
+    [Trait("Feature", "Hardening")]
+    [InlineData("evaluate_expression")]
+    [InlineData("validate_expression")]
+    public async Task CallTool_1005Characters_ReturnsToolErrorWithInputTooLongAtIndex1000Length5(string toolName)
+    {
+        await using var client = await ConnectAsync();
+
+        var result = await client.CallToolAsync(
+            toolName,
+            new Dictionary<string, object?> { ["expression"] = new string('1', 1005) });
+
+        Assert.True(result.IsError);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
+        Assert.Contains("InputTooLong", text, StringComparison.Ordinal);
+        Assert.Contains("index 1000", text, StringComparison.Ordinal);
+        Assert.Contains("length 5", text, StringComparison.Ordinal);
+    }
 }

@@ -1,0 +1,6 @@
+# Consistent LF in the repository on every OS (raw strings, formatting and smoke tests depend on it).
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.pdf binary
+*.png binary

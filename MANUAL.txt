@@ -1,0 +1,359 @@
+========================================================================
+  CALC - USER MANUAL                                       version 1.0.0
+========================================================================
+
+calc is a calculator for the command line. You type an arithmetic
+expression such as 10 - 2 * 6 / 4 and calc prints the exact result.
+
+  - It follows the usual rules of arithmetic: * and / before + and -.
+  - It calculates with exact decimal numbers, so 0.1 + 0.2 is 0.3.
+  - When something is wrong, it shows exactly where.
+  - It also understands simple questions in plain English.
+
+
+CONTENTS
+
+   1. Getting started
+   2. Ways to use calc
+   3. Writing expressions
+   4. Asking questions in plain English
+   5. Options
+   6. Results and precision
+   7. Errors
+   8. Exit status
+   9. Examples
+  10. Tips
+  11. Limitations
+   A. Grammar
+
+
+------------------------------------------------------------------------
+1. GETTING STARTED
+------------------------------------------------------------------------
+
+calc needs the .NET 10 SDK. From the repository folder, build it once:
+
+    dotnet publish src/Calculator.Cli -c Release -o out/calc
+
+Then run it:
+
+    macOS / Linux:        ./out/calc/calc "10 - 2 * 6 / 4"
+    Windows PowerShell:   .\out\calc\calc.exe "10 - 2 * 6 / 4"
+
+Both print 7. In this manual, "calc" stands for either command.
+
+
+------------------------------------------------------------------------
+2. WAYS TO USE CALC
+------------------------------------------------------------------------
+
+One-shot
+    Give the expression as an argument. If you pass several arguments,
+    they are joined with spaces into one expression.
+
+        $ calc "10 - 2 * 6 / 4"
+        7
+
+Interactive
+    Run calc with no arguments. It shows a "> " prompt and evaluates
+    each line you type. A mistake never ends the session.
+
+        calc 1.0.0 - type an expression, 'help' or 'exit'
+        > 10-2*6/4
+        7
+        > explain 2+3*4
+        3 * 4 = 12
+        2 + 12 = 14
+        14
+        > exit
+
+    Commands:
+        help                  show the help text
+        explain <expression>  show each step, then the result
+        exit or quit          leave (Ctrl+D also works)
+
+Piped
+    Send expressions to calc, one per line. Blank lines and lines that
+    start with # are skipped. If a line fails, calc reports it with its
+    line number and carries on with the next line.
+
+        $ printf '1+2\n# comment\n10/0\n0.1+0.2\n' | calc
+        3
+        line 3: error[DivisionByZero]: division by zero
+          10/0
+            ^
+        0.3
+
+    Line numbers count every line, including comments and blank lines.
+
+Step by step
+    Add -e (or --explain) in any mode to see each operation in the
+    order calc performs it.
+
+        $ calc -e "10 - 2 * 6 / 4"
+        2 * 6 = 12
+        12 / 4 = 3
+        10 - 3 = 7
+        7
+
+
+------------------------------------------------------------------------
+3. WRITING EXPRESSIONS
+------------------------------------------------------------------------
+
+An expression is a list of numbers joined by operators. It can be as
+long as you like.
+
+Operators, from highest to lowest priority:
+
+    Operator   Meaning                    Order
+    --------   ------------------------   -------------
+    + -        sign of a number (-5)      -
+    * /        multiply, divide           left to right
+    + -        add, subtract              left to right
+
+So 10 - 2 * 6 / 4 is worked out as 10 - ((2 * 6) / 4) = 7, and
+100 / 10 / 5 is (100 / 10) / 5 = 2.
+
+Numbers
+    Digits with an optional decimal point: 42, 2.5, .5 and 5. are all
+    valid. Always use "." as the decimal point.
+
+Signs
+    A number may have a sign, and signs can be repeated:
+    -5+3 is -2, and 5 - - 3 is 8.
+
+Spaces
+    Spaces and tabs are allowed between numbers and operators, but not
+    inside a number. "10-2*6/4" and "10 - 2 * 6 / 4" mean the same.
+
+Typographic symbols
+    The multiplication sign (×), the division sign (÷) and the minus
+    sign (−) work like *, / and -:
+
+        $ calc "2 × 3 ÷ 4 − 1"
+        0.5
+
+Not supported
+    Parentheses, exponents (2 ^ 3), scientific notation (1e3),
+    thousands separators (1,000), variables and functions. calc rejects
+    these with a clear error rather than guessing what you meant.
+
+
+------------------------------------------------------------------------
+4. ASKING QUESTIONS IN PLAIN ENGLISH
+------------------------------------------------------------------------
+
+If your input contains letters, calc tries to translate it into an
+expression. It prints the translation on stderr, then evaluates it.
+
+    $ calc "What is 10 minus 2 multiplied by 6 divided by 4?"
+    interpreted as: 10 - 2 * 6 / 4
+    7
+
+    $ calc "Calculate 2.5 times 4."
+    interpreted as: 2.5 * 4
+    10
+
+Words calc understands (upper or lower case):
+
+    Opening phrases   what is, what's, calculate, compute,
+                      how much is, please
+    Operators         plus, minus, times, multiplied by, x,
+                      divided by, over
+    Ending            one ? or .
+    Numbers           written with digits: 3, 2.5
+
+Number words ("ten plus two"), other word orders ("subtract 2 from
+10"), grouping and percentages are not understood. calc then reports
+the first character it could not use:
+
+    $ calc "subtract 2 from 10"
+    error[UnexpectedCharacter]: unexpected character 's'; use numbers and + - * /
+      subtract 2 from 10
+      ^
+
+The translated text is checked by the same strict rules as anything you
+type, so a question can never produce an unchecked result.
+
+
+------------------------------------------------------------------------
+5. OPTIONS
+------------------------------------------------------------------------
+
+    -e, --explain    Print each step before the result, in every mode.
+    -h, --help       Print a short help text and exit with status 0.
+    --version        Print "calc 1.0.0" and exit with status 0.
+
+An argument counts as an option only when it is "-" or "--" followed by
+a letter. Negative numbers therefore need no special care:
+"calc -5+3" prints -2.
+
+An unknown option prints a message and a usage line to stderr and exits
+with status 2:
+
+    $ calc --bogus
+    calc: unknown option '--bogus'
+    usage: calc [-e|--explain] [expression]   (try --help)
+
+
+------------------------------------------------------------------------
+6. RESULTS AND PRECISION
+------------------------------------------------------------------------
+
+Exact input
+    calc uses exact decimal arithmetic (.NET System.Decimal), not binary
+    floating point. A number you type is used exactly as written. If it
+    has more digits than can be stored exactly (more than 28-29
+    significant digits), calc rejects it with InvalidNumber instead of
+    rounding it silently.
+
+Displayed results
+    Results are rounded half away from zero to 25 significant digits.
+    For values below 1, that means 25 decimal places. Trailing zeros
+    are removed, and the output never uses exponents or thousands
+    separators.
+
+        $ calc 1/3
+        0.3333333333333333333333333
+
+    Because calc keeps a few more digits internally than it shows,
+    rounding errors cancel out where you would expect them to:
+
+        $ calc "1/3*3"
+        1
+
+Range
+    The largest magnitude is 79228162514264337593543950335. A larger
+    result is reported as an Overflow error. A result smaller than
+    about 1e-28 becomes 0:
+
+        $ calc "0.0000000000000001 * 0.0000000000000001"
+        0
+
+Output streams
+    Results, steps and help go to stdout. Errors and "interpreted as"
+    notes go to stderr. Redirecting stdout (calc ... > out.txt)
+    therefore collects clean results only.
+
+
+------------------------------------------------------------------------
+7. ERRORS
+------------------------------------------------------------------------
+
+An error has three lines: the error code and a message, your input, and
+carets (^) under the part that caused the problem.
+
+    $ calc "10 + * 3"
+    error[MissingOperand]: expected a number after '+'
+      10 + * 3
+           ^
+
+In piped mode, the first line starts with "line N: ".
+
+If an expression has several problems, calc reports the leftmost one.
+Mistakes in how the expression is written are always reported before
+calculation problems: "1/0 +" gives MissingOperand, not DivisionByZero.
+
+    Code                  Example       What it means
+    -------------------   -----------   ------------------------------
+    EmptyExpression       (nothing)     There is nothing to calculate.
+    UnexpectedCharacter   2 + a         A character calc does not
+                                        accept, such as a letter or a
+                                        parenthesis.
+    InvalidNumber         1.2.3         A malformed number, or one with
+                                        too many digits to be exact.
+    MissingOperand        10 +          A number is missing after an
+                                        operator.
+    MissingOperator       10 20         An operator is missing between
+                                        two numbers.
+    DivisionByZero        10 / 0        Division by zero.
+    Overflow              (see 6)       A number or result is too large.
+    InputTooLong          (see 11)      The input is over 10,000
+                                        characters.
+
+
+------------------------------------------------------------------------
+8. EXIT STATUS
+------------------------------------------------------------------------
+
+    0   Every expression succeeded (also for --help and --version).
+    1   At least one expression failed.
+    2   The command line was invalid, for example an unknown option.
+
+The interactive session always exits with 0, because errors in it are
+part of normal use.
+
+
+------------------------------------------------------------------------
+9. EXAMPLES
+------------------------------------------------------------------------
+
+Several operators of mixed priority:
+
+    $ calc "100 / 10 / 5 + 2 * 3"
+    8
+
+A question:
+
+    $ calc "How much is 9 over 3"
+    interpreted as: 9 / 3
+    3
+
+Using the result in a shell script:
+
+    $ total=$(calc "19.99 * 3 + 4.5"); echo "$total"
+    64.47
+
+Reacting to a failure:
+
+    $ calc "1 / 0" || echo failed
+    error[DivisionByZero]: division by zero
+      1 / 0
+        ^
+    failed
+
+
+------------------------------------------------------------------------
+10. TIPS
+------------------------------------------------------------------------
+
+  - Quote expressions that contain *. Write calc "2 * 3", not
+    calc 2 * 3: most shells replace a bare * with file names. You can
+    also write calc 3 x 4.
+  - The interactive mode has no command history on macOS and Linux. To
+    add it, run calc through rlwrap: rlwrap calc
+  - In scripts, check the exit status instead of reading stderr.
+
+
+------------------------------------------------------------------------
+11. LIMITATIONS
+------------------------------------------------------------------------
+
+  - No parentheses, exponents, functions, variables or scientific
+    notation.
+  - Precision and range are those of System.Decimal (see section 6).
+  - Only the simple question forms in section 4 are understood.
+  - An input line, or the joined arguments, may be at most 10,000
+    characters long.
+
+
+------------------------------------------------------------------------
+A. GRAMMAR
+------------------------------------------------------------------------
+
+For reference, the exact syntax in EBNF notation:
+
+    expression = term , { ( "+" | "-" ) , term } ;
+    term       = factor , { ( "*" | "/" ) , factor } ;
+    factor     = { "+" | "-" } , number ;
+    number     = digits , [ "." , [ digits ] ] | "." , digits ;
+    digits     = digit , { digit } ;
+
+
+SEE ALSO
+
+    README.md        Quick start, the service proof of concept, and an
+                     overview of the project.
+    docs/DESIGN.md   How the calculator would grow into a shared service
+                     with natural-language input.

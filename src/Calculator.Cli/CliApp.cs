@@ -80,7 +80,14 @@ internal sealed class CliApp(TextReader input, TextWriter output, TextWriter err
         var expressionArgs = args.Where(arg => !IsOption(arg)).ToArray();
         if (expressionArgs.Length > 0)
         {
-            return Evaluate(string.Join(' ', expressionArgs), linePrefix: "", explain) ? Success : EvaluationFailed;
+            var text = string.Join(' ', expressionArgs);
+            if (text.Length > MaxLineLength)
+            {
+                ReportTooLong(prefix: "");
+                return EvaluationFailed;
+            }
+
+            return Evaluate(text, linePrefix: "", explain) ? Success : EvaluationFailed;
         }
 
         return isInputRedirected ? RunBatch(explain) : RunRepl(explain);

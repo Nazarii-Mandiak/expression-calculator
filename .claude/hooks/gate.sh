@@ -8,9 +8,13 @@
 mode="${1:---fast}"
 input="$(cat)"
 if [[ "${2:-}" == "--only" && -n "${3:-}" ]]; then
-  cmd="$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null)"
-  read -r tool sub <<<"$3"
-  grep -qE "(^|[;&|[:space:]])${tool}[[:space:]]+${sub}([[:space:]]|$)" <<<"$cmd" || exit 0
+  # Fail closed: without jq we cannot tell what the command is, so gate it.
+  if command -v jq >/dev/null; then
+    cmd="$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null)"
+    read -r tool sub <<<"$3"
+    # Also matches global options before the subcommand, e.g. `git -C dir commit`, `git -c k=v commit`.
+    grep -qE "(^|[;&|[:space:]])${tool}([[:space:]]+-[cC][[:space:]]+[^[:space:]]+)*[[:space:]]+${sub}([[:space:]]|$)" <<<"$cmd" || exit 0
+  fi
 fi
 
 cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}" || exit 2

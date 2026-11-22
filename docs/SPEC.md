@@ -1,26 +1,33 @@
 # Specification
 
-Requirements (R) are paraphrased from the project brief. Features (F) are delivered one pull request
-each, test-first. Every acceptance row below becomes at least one automated test tagged with its
-requirement and feature IDs.
+This specification defines what the calculator must do. Requirements (R1-R9) restate the brief.
+Features (F1-F9) turn them into concrete rules and examples.
+
+**How to read it.** Each feature was delivered on its own branch, tests first. Every test is tagged
+with the requirement and feature it proves (`[Trait("Requirement", "R3")]`,
+`[Trait("Feature", "F2")]`). The examples here are representative; the tests in `tests/` hold the
+complete cases.
 
 ## Requirements
 
 | ID | Requirement |
-|----|-------------|
+| -- | ----------- |
 | R1 | A console application lets a user type an equation and prints the result. |
-| R2 | Equations contain any number of operands and the operators `+ - * /`, starting and ending with a number. Parentheses are not required. |
-| R3 | Results are mathematically correct: `*` and `/` bind tighter than `+` and `-`; equal precedence evaluates left to right (`10-2*6/4 = 7`). |
-| R4 | Numeric results are exact for decimal input (`0.1 + 0.2 = 0.3`) and displayed consistently on every machine, independent of OS culture. |
+| R2 | An equation has any number of operands joined by `+ - * /`, starting and ending with a number. Parentheses are not required. |
+| R3 | Results are mathematically correct: `*` and `/` bind tighter than `+` and `-`, and operators of equal priority run left to right (`10-2*6/4 = 7`). |
+| R4 | Results are exact for decimal input (`0.1 + 0.2 = 0.3`) and look the same on every machine, whatever its language settings. |
 | R5 | Invalid input and arithmetic failures produce clear, located error messages and never crash the program. |
-| R6 | The interface is designed for how people actually use a calculator: interactive, one-shot, scripted/piped, explainable, natural-language questions. |
-| R7 | Commercial quality: clear design, consistent code style enforced by tooling, automated tests, CI. |
-| R8 | Documentation: a plain-text manual, AI-usage disclosure, and a 2–4 page service/AI design document. |
-| R9 | Service proof of concept: the same engine over REST and MCP, natural-language input with LLM output validated before execution, free to run (no paid API keys). |
+| R6 | The interface fits how people really use a calculator: interactive, one-shot, scripted, explained, and in plain English. |
+| R7 | Commercial quality: clear design, a code style enforced by tooling, automated tests and CI. |
+| R8 | Documentation: a plain-text manual, a disclosure of AI use, and a 2-4 page design for a service with AI input. |
+| R9 | A service proof of concept: the same engine over REST and MCP, natural-language input whose model output is validated before execution, and no paid API keys. |
 
 ## Grammar (R2)
 
-```
+An expression is a chain of terms joined by `+` or `-`. A term is a chain of factors joined by `*` or
+`/`. This structure gives multiplication and division their higher priority.
+
+```text
 expression = term , { ( "+" | "-" ) , term } ;
 term       = factor , { ( "*" | "/" ) , factor } ;
 factor     = { "+" | "-" } , number ;                 (* unary signs *)
@@ -28,351 +35,263 @@ number     = digits , [ "." , [ digits ] ] | "." , digits ;
 digits     = digit , { digit } ;
 ```
 
-- Aliases: `×` (U+00D7) = `*`, `÷` (U+00F7) = `/`, `−` (U+2212) = `-`.
-- Spaces and tabs are allowed between tokens, never inside a number.
-- Out of scope (rejected with a clear error): parentheses, exponents, scientific notation, variables,
-  thousands separators.
-- Positions are zero-based indexes into the original text. A missing operand at the end of the input
-  is reported at `text.Length`. `Length` is always at least 1.
+| Accepted | Rejected with a clear error |
+| -------- | --------------------------- |
+| Spaces and tabs between tokens | Spaces inside a number |
+| `×` (U+00D7) for `*`, `÷` (U+00F7) for `/`, `−` (U+2212) for `-` | Parentheses, exponents, scientific notation |
+| Repeated unary signs (`5 - - 3`) | Variables, thousands separators |
 
----
+**Error positions** are zero-based indexes into the original text. A missing operand at the end of
+the input is reported at `text.Length`. The length of a reported span is always at least 1.
 
-## F1 — Parse and validate (R2, R5) · `Expression.Parse`, `Expression.ToString`
+## F1 - Parse and validate (R2, R5)
 
-Valid input and canonical form (single spaces, ASCII operators, numbers normalised, unary signs folded):
+**API:** `Expression.Parse`, `Expression.ToString`
 
-| Input | `ToString()` |
-|-------|--------------|
-| `10-2*6/4` | `10 - 2 * 6 / 4` |
-| `  10 - 2 * 6 / 4  ` | `10 - 2 * 6 / 4` |
-| `42` | `42` |
-| `3.50 + .5` | `3.5 + 0.5` |
-| `5. * 2` | `5 * 2` |
+Parsing checks the whole input and returns a validated expression. `ToString` returns the canonical
+form: single spaces, ASCII operators, normalised numbers and folded unary signs.
+
+| Input | Canonical form |
+| ----- | -------------- |
+| `3.50 + .5` (with spaces around it) | `3.5 + 0.5` |
 | `2 × 3 ÷ 4 − 1` | `2 * 3 / 4 - 1` |
-| `-5 + 3` | `-5 + 3` |
-| `2 * -3` | `2 * -3` |
 | `5 - - 3` | `5 - -3` |
 | `--5` | `5` |
-| `+5` | `5` |
-| `1\t+\t2` (tabs) | `1 + 2` |
-
-Errors (`CalculationException`):
-
-| Input | Code | Position | Length | Message must mention |
-|-------|------|----------|--------|----------------------|
-| `` (empty) | EmptyExpression | 0 | 1 | |
-| `   ` | EmptyExpression | 0 | 1 | |
-| `2 + a` | UnexpectedCharacter | 4 | 1 | `a` |
-| `(1+2)` | UnexpectedCharacter | 0 | 1 | parentheses |
-| `1,5` | UnexpectedCharacter | 1 | 1 | `.` (decimal point hint) |
-| `1e3` | UnexpectedCharacter | 1 | 1 | |
-| `1.2.3` | InvalidNumber | 0 | 5 | |
-| `.` | InvalidNumber | 0 | 1 | |
-| `79228162514264337593543950336` | Overflow | 0 | 29 | |
-| `10 +` | MissingOperand | 4 | 1 | |
-| `-` | MissingOperand | 1 | 1 | |
-| `10 * / 2` | MissingOperand | 5 | 1 | |
-| `* 3` | MissingOperand | 0 | 1 | |
-| `10 20` | MissingOperator | 3 | 2 | |
-
-More valid input:
-
-| Input | `ToString()` |
-|-------|--------------|
 | `-0` | `0` |
 | `007` | `7` |
-| `0.0000000000000000000000000001` (28 decimals, exactly representable) | `0.0000000000000000000000000001` |
-| 50,000 operands (`1 + 1 + … + 1`) | parses without error (no stack overflow) |
-| 10,000 unary minus signs followed by `5` | `5` |
 
-More errors:
-
-| Input | Code | Position | Length | Message must mention |
-|-------|------|----------|--------|----------------------|
-| `0.00000000000000000000000000001` (29 decimals) | InvalidNumber | 0 | 31 | exactly |
-| `1.00000000000000000000000000001` | InvalidNumber | 0 | 31 | exactly |
-| `1 .5` | MissingOperator | 2 | 2 | |
-| `* a` | MissingOperand | 0 | 1 | |
-| `10 * / 2 a` | MissingOperand | 5 | 1 | |
+| Invalid input | Error code | Position, length |
+| ------------- | ---------- | ---------------- |
+| `2 + a` | UnexpectedCharacter | 4, 1 |
+| `1.2.3` | InvalidNumber | 0, 5 |
+| `10 +` | MissingOperand | 4, 1 |
+| `10 20` | MissingOperator | 3, 2 |
+| empty or blank | EmptyExpression | 0, 1 |
 
 Rules:
 
 - `Parse(null)` throws `ArgumentNullException`.
-- **The leftmost error wins**: input is validated left to right and the first problem is reported,
-  whether it is a bad character, a bad number or a grammar error.
-- **No silent rounding**: a literal that `decimal` cannot represent exactly (more significant or
-  fractional digits than it can hold) is rejected as InvalidNumber, never rounded.
-- A syntax error is always reported even if an earlier part would fail at evaluation (`1/0 +` →
-  MissingOperand, not DivisionByZero).
-- The `1,5` message must contain `'.'` (the quoted decimal point), not just a full stop.
-- Error messages never echo more than about 20 characters of user input, and control or invisible
-  characters are shown as `U+XXXX`; a surrogate pair (e.g. an emoji) is one character with Length 2.
+- **The leftmost error wins**, whether it is a bad character, a bad number or a grammar error.
+  `10 * / 2 a` is MissingOperand at 5.
+- **A syntax error beats an evaluation error.** `1/0 +` is MissingOperand, not DivisionByZero.
+- **No silent rounding.** A literal that `decimal` cannot hold exactly (more than 28 decimals, or too
+  many digits) is InvalidNumber, and its message says "exactly". An integer beyond `decimal.MaxValue`
+  is Overflow.
+- A `(` gets a message that mentions parentheses. `1,5` gets a message that quotes `'.'` as the
+  decimal point.
+- 50,000 operands and 10,000 unary signs parse without a stack overflow.
+- Messages quote at most about 20 characters of the input. Control and invisible characters appear as
+  `U+XXXX`. A surrogate pair, such as an emoji, counts as one character with length 2.
 
-## F2 — Evaluate and format (R3, R4, R5) · `Expression.Evaluate`, `NumberFormatter.Format`
+## F2 - Evaluate and format (R3, R4, R5)
 
-| Input | Value | Steps (in order) |
-|-------|-------|------------------|
+**API:** `Expression.Evaluate`, `NumberFormatter.Format`
+
+| Expression | Result | Steps |
+| ---------- | ------ | ----- |
 | `10-2*6/4` | 7 | `2 * 6 = 12`, `12 / 4 = 3`, `10 - 3 = 7` |
-| `2+3*4` | 14 | `3 * 4 = 12`, `2 + 12 = 14` |
-| `10-5-2` | 3 | `10 - 5 = 5`, `5 - 2 = 3` |
-| `100/10/5` | 2 | `100 / 10 = 10`, `10 / 5 = 2` |
-| `2*3/4` | 1.5 | |
-| `1+2+3+4+5` | 15 | |
+| `100/10/5` | 2 | |
 | `0.1+0.2` | 0.3 | |
-| `-5+3` | -2 | |
-| `2*-3` | -6 | |
 | `5--3` | 8 | |
-| `7` | 7 | (none) |
+| `7` | 7 | none |
 
-| Input | Code | Position | Length |
-|-------|------|----------|--------|
-| `10 / 0` | DivisionByZero | 3 | 1 |
-| `1 + 5 / 0.0` | DivisionByZero | 6 | 1 |
-| `79228162514264337593543950335 + 1` | Overflow | 30 | 1 |
-| `79228162514264337593543950335 * 2` | Overflow | 30 | 1 |
+| Failing expression | Error code | Position, length |
+| ------------------ | ---------- | ---------------- |
+| `10 / 0` | DivisionByZero | 3, 1 |
+| `5 / -0` | DivisionByZero | 2, 1 |
+| `79228162514264337593543950335 + 1` | Overflow | 30, 1 |
+| `-79228162514264337593543950335 - 1` | Overflow | 31, 1 |
 
-`NumberFormatter.Format` (invariant culture; rounded half away from zero to
-`max(0, 25 − integer digits)` decimal places, where integer digits is 0 when |value| < 1; no trailing
-zeros, exponent or group separators):
+**Display rule.** `NumberFormatter.Format` uses the invariant culture. It rounds half away from zero
+to `max(0, 25 - integer digits)` decimals, where integer digits is 0 for values between -1 and 1.
+It never prints trailing zeros, exponents or group separators.
 
-| Value | Text |
-|-------|------|
-| `2.5m` | `2.5` |
+| Value | Displayed |
+| ----- | --------- |
 | `7.000m` | `7` |
-| `0m`, `-0.0m` | `0` |
-| `-2.5m` | `-2.5` |
-| `0.0000001m` | `0.0000001` |
-| result of `1/3` | `0.3333333333333333333333333` |
-| result of `2/3` | `0.6666666666666666666666667` |
-| result of `1/3*3` | `1` |
-| `79228162514264337593543950335m` | `79228162514264337593543950335` |
+| `-0.0m` | `0` |
+| `1/3` | `0.3333333333333333333333333` |
+| `1/3*3` | `1` |
 | `12345678901234567890.123456789m` | `12345678901234567890.12346` |
-
-More evaluation rows:
-
-| Input | Expected |
-|-------|----------|
-| `79228162514264337593543950335 / 0.5` | Overflow at 30, length 1 |
-| `-79228162514264337593543950335 - 1` | Overflow at 31, length 1 |
-| `5 / -0` | DivisionByZero at 2, length 1 |
-| `0.0000000000000001 * 0.0000000000000001` | value `0` (underflow, see rules) |
-
-More formatting rows:
-
-| Value | Text | Why |
-|-------|------|-----|
-| `1234567890123456789012344.5m` | `1234567890123456789012345` | midpoint rounds away from zero (not to even) |
-| `-0.00000000000000000000000025m` | `-0.0000000000000000000000003` | negative midpoint |
-| `-12345678901234567890.123456789m` | `-12345678901234567890.12346` | sign does not count as a digit |
-| `9.999999999999999999999999999m` | `10` | carry into a new integer digit |
-| `0.9999999999999999999999999999m` | `1` | |
-| `7922816251426433759354395033.5m` | `7922816251426433759354395034` | near the top of the range |
-| `0.0000000000000000000000000001m` | `0.0000000000000000000000000001` | a non-zero value is never shown as `0` |
-| `-0.0000000000000000000000000001m` | `-0.0000000000000000000000000001` | same, negative |
+| `1234567890123456789012344.5m` | `1234567890123456789012345` (midpoint rounds away from zero) |
 
 Rules:
 
-- **Literals are exact; results are rounded by `decimal`.** Each operation's result keeps decimal's
-  28–29 significant digits, so a result smaller than 1e-28 becomes `0` and digits beyond that
-  precision are lost. Only overflow is an error. (A divisor is always a literal in this grammar, so an
-  underflowed intermediate can never cause a false division-by-zero.)
-- **A non-zero value is never displayed as `0`**: if display rounding would produce zero, the exact
-  value is printed instead.
-- Formatting must not depend on `CultureInfo.CurrentCulture` (verified under `uk-UA` and `de-DE`).
+- **Literals are exact; results are rounded by `decimal`.** Each operation keeps 28-29 significant
+  digits, so a result below 1e-28 becomes `0` (`0.0000000000000001 * 0.0000000000000001`). Only
+  overflow is an error.
+- A divisor is always a literal, so underflow can never cause a false division by zero.
+- **A non-zero value is never displayed as `0`.** If display rounding would give zero, the exact value
+  is printed instead.
+- Formatting never depends on `CultureInfo.CurrentCulture`. This is tested under `uk-UA` and `de-DE`.
 
-## F3 — Natural-language translation (R6, R9) · `NaturalLanguage.TryTranslate`
+## F3 - Natural-language translation (R6, R9)
 
-Case-insensitive. Strips leading fillers (`what is`, `what's`, `calculate`, `compute`, `how much is`,
-`please`) and trailing `?`/`.`. Maps `plus`→`+`, `minus`→`-`, `times`/`multiplied by`/`x`→`*`,
-`divided by`/`over`→`/`. Numbers must be written in digits. Symbols are passed through. It never
-evaluates or validates arithmetic (the parser does).
+**API:** `NaturalLanguage.TryTranslate`
 
-| Input | Result |
-|-------|--------|
+The translator works on words, ignoring case:
+
+- It removes leading fillers (`what is`, `what's`, `calculate`, `compute`, `how much is`, `please`)
+  and one trailing `?` or `.`.
+- It maps words to operators: `plus` to `+`; `minus` to `-`; `times`, `multiplied by` and `x` to `*`;
+  `divided by` and `over` to `/`.
+- Numbers must be written as digits. Words may be separated by any whitespace.
+- A word made only of digits, `.` and operator symbols (including the aliases) passes through
+  unchanged. The translator never validates or evaluates; the parser does. For example,
+  `what is 1.2.3 plus 1` becomes `1.2.3 + 1`, which the parser then rejects as InvalidNumber.
+
+| Question | Translation |
+| -------- | ----------- |
 | `What is 10 minus 2 multiplied by 6 divided by 4?` | `10 - 2 * 6 / 4` |
-| `what's 3 plus 4` | `3 + 4` |
-| `Calculate 2.5 times 4.` | `2.5 * 4` |
 | `how much is 9 over 3` | `9 / 3` |
-| `10 x 3` | `10 * 3` |
-| `please compute 1 + 2` | `1 + 2` |
-| `What is 10 minus` | `10 -` (parser will report MissingOperand) |
-| `what is the weather` | false |
-| `subtract 2 from 10` | false (word order changes are not supported) |
-| `ten plus two` | false |
-| `` (empty) | false |
-| `what is 2+2?` | `2+2` (symbol runs pass through unchanged; the parser normalises them) |
-| `what is 10-2*6/4` | `10-2*6/4` |
-| `what is -5 plus 3` | `-5 + 3` |
-| `what is 2 × 3` | `2 × 3` |
-| `What’s 3 plus 4` (typographic apostrophe) | `3 + 4` |
-| `what is 2 plus 3\n` (trailing newline) and NBSP between words | `2 + 3` |
-| `what is 1.2.3 plus 1` | `1.2.3 + 1` (the parser reports the InvalidNumber with its position) |
+| `what is 2+2?` | `2+2` |
+| `What is 10 minus` | `10 -` (the parser then reports MissingOperand) |
+| `what is the weather`, `ten plus two`, `subtract 2 from 10`, empty text | not translated (returns false) |
 
-Any token made only of digits, `.` and operator symbols (including the aliases) is passed through
-untouched; the translator does not check whether it is a valid number. Words are separated by any
-whitespace. Only one trailing `?` or `.` is removed.
+## F4 - Property and differential tests (R3, R4, R7)
 
-## F4 — Property and differential tests (R3, R4, R7) · tests only
+**Tests only.**
 
-- **Differential**: 2,000 random valid expressions (fixed seed, 1–12 operands, integers 0–999 and
-  one-decimal numbers, all four operators, optional unary minus) evaluated by the engine and by an
-  independent reference evaluator written in the test project with a different algorithm
-  (shunting-yard to RPN). Values must match exactly. Division by zero must be reported by both.
-- **Whitespace invariance**: inserting random spaces between tokens never changes the result.
-- **Canonical round-trip**: `Parse(e.ToString())` has the same canonical text and value as `e`.
-- On failure the test prints the seed and the expression.
+- 2,000 random valid expressions are generated from a fixed seed. Each has 1-12 operands, integers
+  from 0 to 999 or numbers with one decimal, and an optional unary minus.
+- Each expression is evaluated by the engine and by an independent shunting-yard reference in the
+  test project. The values must match exactly, and both must report any division by zero.
+- Random whitespace never changes a result.
+- `Parse(e.ToString())` gives the same text and the same value as `e`.
+- A failure prints the seed and the expression, so it can be reproduced.
 
-## F5 — CLI one-shot and batch modes (R1, R5, R6) · `calc` binary
+## F5 - Console: one-shot and piped modes (R1, R5, R6)
 
-- One-shot: all arguments are joined with spaces and evaluated. An argument starting with `-` followed
-  by a digit or `.` is part of the expression (`calc -5+3` → `-2`).
-- Batch: when stdin is redirected and no expression argument is given, each line is evaluated; blank
-  lines and lines starting with `#` are skipped.
-- Results go to stdout, one per line. Diagnostics go to stderr.
-- Input containing letters is first translated with `NaturalLanguage`; on success stderr shows
-  `interpreted as: <canonical>`.
-- Exit codes: `0` all succeeded · `1` at least one expression failed · `2` usage error.
+**Program:** `calc`
 
-| Invocation | stdout | stderr | Exit |
-|------------|--------|--------|------|
-| `calc "10 - 2 * 6 / 4"` | `7` | | 0 |
-| `calc 10 - 2 / 4` | `9.5` | | 0 |
-| `calc -5+3` | `-2` | | 0 |
-| `calc "What is 10 minus 2 multiplied by 6 divided by 4?"` | `7` | `interpreted as: 10 - 2 * 6 / 4` | 0 |
-| `calc "10 + * 3"` | | see error format | 1 |
-| `printf '1+2\n\n# c\n10/0\n' \| calc` | `3` | `line 4: ` + error format | 1 |
-| `calc --bogus` | | usage text | 2 |
+- **One-shot.** Arguments are joined with spaces. An argument is an option only if it is `-` or `--`
+  followed by a letter; everything else is expression text.
 
-More rules and rows:
+  | Command | Output |
+  | ------- | ------ |
+  | `calc -5+3` | `-2` |
+  | `calc --5` | `5` |
+  | `calc 5 --3` | `8` |
+  | `calc -` | MissingOperand |
 
-- An argument is an option only if it is `-` or `--` followed by a letter (`-e`, `--help`, `--bogus`).
-  Everything else is part of the expression: `calc "- 5"` → `-5`, `calc --5` → `5`, `calc 5 --3` → `8`,
-  `calc -` → MissingOperand, exit 1.
-- The echoed input line is terminal-safe and keeps columns aligned: a tab is shown as a space and a
-  control or format character as `?` (one character per character, so the caret stays aligned).
-- Batch lines longer than 10,000 characters are rejected as `line N: error[InputTooLong]: …` (exit 1,
-  processing continues). A UTF-8 byte-order mark at the start of the first line is ignored.
-- When a natural-language question translates but the translation does not parse, stderr shows
-  `interpreted as: <translated text>` before the error block (e.g. `What is 10 minus` → `10 -`,
-  MissingOperand, caret after `-`).
-- With no arguments and stdin not redirected, F5 alone exits 2 with usage (F6 replaces this with the
-  interactive mode).
+- **Piped.** When stdin is redirected and no expression is given, each line is evaluated. Blank lines
+  and lines starting with `#` are skipped, and a leading UTF-8 byte-order mark is ignored. Results go
+  to stdout and diagnostics to stderr.
+- **Questions.** Input that contains letters is first translated by `NaturalLanguage`. Stderr then
+  shows `interpreted as: <text>`, even if the translation fails to parse.
+  `calc "What is 10 minus 2 multiplied by 6 divided by 4?"` prints `7`.
+- **Limits.** A piped line over 10,000 characters gives `line N: error[InputTooLong]: ...`, and
+  processing continues. One-shot arguments over 10,000 characters in total give
+  `error[InputTooLong]` with exit code 1 and no echo of the input.
+- **Safe echo.** The echoed input is safe for the terminal and keeps its columns aligned: a tab
+  becomes a space, and a control or format character becomes `?`.
+- **Exit codes.** `0` when everything succeeded, `1` when at least one expression failed, `2` for a
+  usage error such as `calc --bogus`.
+- **Error format.** A two-space indent, with `^` repeated `Length` times. In piped mode, the first line
+  starts with `line N:` and a space. For example, `printf '1+2\n10/0\n' | calc` prints `3`, then the error block
+  for line 2, and exits with 1.
 
-| Invocation | stdout | stderr | Exit |
-|------------|--------|--------|------|
-| `printf '1\t+\t2 +\n' \| calc` | | caret under end of input, aligned with the echoed spaces | 1 |
-| `calc "2 + 3 $(printf '\033')[31m x"` | | echo shows `?` for ESC; no raw control characters on stderr | 1 |
-| `printf '\xEF\xBB\xBF1+2\n' \| calc` | `3` | | 0 |
-| `calc 1 --x` | | usage | 2 |
-
-Error format (two-space indent, caret under the offending span, `^` repeated `Length` times):
-```
+```text
 error[MissingOperand]: expected a number after '+'
   10 + * 3
        ^
 ```
 
-## F6 — CLI interactive mode and flags (R1, R6)
+## F6 - Console: interactive mode and options (R1, R6)
 
-- No arguments and stdin not redirected → REPL. Banner line, prompt `> `.
-- Commands: `help`, `explain <expression>`, `exit`, `quit`; end of input (Ctrl+D) exits with 0.
-- Errors never end the session; the caret is aligned under the text typed after the prompt.
-- Flags: `-h`/`--help` (usage to stdout, exit 0), `--version` (`calc 1.0.0`, exit 0),
-  `-e`/`--explain` (print each step as `2 * 6 = 12` before the result, any mode).
+- **Interactive.** With no arguments and stdin not redirected, `calc` starts a session: a banner line,
+  then the prompt `>` followed by a space. Commands are `help`, `explain <expression>`, `exit` and `quit`. End of input
+  (Ctrl+D) exits with 0. Errors never end the session, and the caret aligns under the typed text.
+- **Options.** `-h` or `--help` prints usage to stdout and exits with 0. `--version` prints
+  `calc 1.0.0` and exits with 0. `-e` or `--explain` prints each step (such as `2 * 6 = 12`) before the
+  result, in any mode.
+- `explain 10-2*6/4` prints the three steps, then `7`. `2 +` prints `error[MissingOperand]` and the
+  caret line, then the next prompt.
 
-| Session input | Output contains |
-|---------------|-----------------|
-| `10-2*6/4` | `7` |
-| `explain 10-2*6/4` | `2 * 6 = 12`, `12 / 4 = 3`, `10 - 3 = 7`, `7` |
-| `2 +` | `error[MissingOperand]` and the caret line, then the next prompt |
-| `help` | the list of commands and operators |
-| `exit` | session ends, exit code 0 |
+## F7 - REST API (R9)
 
-## F7 — REST API (R9) · `Calculator.Api`
+**Project:** `Calculator.Api`
 
 | Request | Response |
-|---------|----------|
+| ------- | -------- |
 | `POST /v1/evaluations` `{"expression":"10 - 2 * 6 / 4"}` | 200 `{"expression":"10 - 2 * 6 / 4","result":"7"}` |
-| same with `"explain":true` | 200 plus `"steps":[{"left":"2","operator":"*","right":"6","result":"12"},…]` |
+| The same with `"explain":true` | 200, plus `"steps":[{"left":"2","operator":"*","right":"6","result":"12"},...]` |
 | `POST /v1/evaluations` `{"expression":"10 / 0"}` | 422 Problem Details: `errorCode` `DivisionByZero`, `position` 3, `length` 1 |
-| `POST /v1/evaluations/validate` `{"expression":"10 + * 3"}` | 200 `{"valid":false,"error":{"errorCode":"MissingOperand","position":5,"length":1,"message":…}}` |
-| `POST /v1/evaluations/validate` `{"expression":"10-2"}` | 200 `{"valid":true,"canonical":"10 - 2"}` |
-| missing or non-string `expression` | 400 Problem Details |
-| expression longer than 1,000 characters | 422 `errorCode` `InputTooLong` |
-| request body over 16 KB | 413 |
+| `POST /v1/evaluations/validate` `{"expression":"10 + * 3"}` | 200 `{"valid":false,"error":{"errorCode":"MissingOperand","position":5,"length":1,"message":...}}` |
+| `POST /v1/evaluations/validate` with a valid expression | 200 `{"valid":true,"canonical":"10 - 2"}` |
 | `GET /health` | 200 |
-| `GET /openapi/v1.json` | 200 OpenAPI document |
 
-Results and step values are strings (precision-safe for JavaScript clients).
+Rules:
 
-More rules (verified in the Production environment, not Development):
+- `GET /openapi/v1.json` declares 200, 400, 413 and 422 for both endpoints.
+- Results and step values are strings, so JavaScript clients lose no precision.
+- A missing or non-string `expression`, or an unknown JSON member (`"explian":true`), gives 400. A
+  request body over 16 KB gives 413.
+- An expression over 1,000 characters gives 422 `InputTooLong`, with `position` 1000 and `length`
+  equal to the number of characters beyond the limit.
+- Every error (400, 413, 422 and any unexpected 500) is `application/problem+json` with `status`,
+  `title`, `instance` (`<METHOD> <path>`) and `traceId`. This is verified in the Production
+  configuration.
+- The console accepts longer input (10,000 characters) than the API (1,000). The console is a local
+  scripting tool, while the API is shared and exposed to the network.
 
-- Every error response is `application/problem+json` (400, 413, 422 and any unexpected 500) with
-  `status`, `title`, `instance` (`<METHOD> <path>`) and `traceId`.
-- `InputTooLong` also carries `position` 1000 and `length` = characters beyond the limit.
-- Unknown JSON members are rejected with 400 (`{"expression":"1+1","explian":true}`).
-- The OpenAPI document declares 200, 400, 413 and 422 responses for both endpoints.
+## F8 - MCP tools (R9)
 
-## F8 — MCP tools (R9) · `/mcp` (Streamable HTTP)
+**Endpoint:** `/mcp` (Streamable HTTP)
 
-| Tool | Input | Output |
-|------|-------|--------|
-| `evaluate_expression` | `expression` (string) | structured content `{expression, result, steps}` (the text block carries the same JSON, so it contains `7`); errors are MCP tool errors (`isError`) whose text names the error code and position |
-| `validate_expression` | `expression` | `{valid, canonical?, error?}` |
+| Tool | Returns |
+| ---- | ------- |
+| `evaluate_expression(expression)` | Structured content `{expression, result, steps}`; the text block carries the same JSON |
+| `validate_expression(expression)` | `{valid, canonical?, error?}` |
 
-Tool descriptions tell the host model to translate the user's words into an expression using only
-`+ - * /` and to never compute the answer itself; unsupported questions (grouping, powers, percentages)
-must be reported as unsupported, never rearranged or partly computed by the model.
+Rules:
 
-More rows:
+- Errors are MCP tool errors (`isError`). Their text names the code, the zero-based `index` and the
+  `length`. `10 + * 3` gives `MissingOperand`, `index 5`, `length 1`.
+- 1,001 characters give `InputTooLong` at `index 1000`. 1,005 characters also give `length 5`, as in
+  REST. `"expression": null` gives `MissingExpression`.
+- The tool descriptions tell the assistant's model to translate the user's words into `+ - * /` only
+  and never to compute the answer. Unsupported questions (grouping, powers, percentages) must be
+  reported as unsupported, not rearranged.
+- There is no authentication, because this is a local proof of concept. Requests whose `Host` is not
+  `localhost`, `127.0.0.1` or `[::1]` are rejected, which protects against DNS rebinding.
+  Deployments override the allowed hosts in configuration.
 
-| Call | Result |
-|------|--------|
-| `evaluate_expression` / `validate_expression` with 1,001 characters | tool error text contains `InputTooLong` and `index 1000` |
-| either tool with `"expression": null` | tool error text contains `MissingExpression` (no generic error) |
-| `evaluate_expression` `10 + * 3` | tool error text contains `MissingOperand`, `index 5` and `length 1` (positions are zero-based) |
+## F9 - Natural-language endpoint with a validated model fallback (R9)
 
-Security: the PoC has no authentication and is meant for local use; requests whose `Host` is not
-`localhost`/`127.0.0.1`/`[::1]` are rejected (DNS-rebinding protection required by the MCP
-Streamable HTTP transport). Deployments override the allowed hosts through configuration.
+**Endpoint:** `POST /v1/evaluations/natural-language` `{"question": "..."}`
 
-## F9 — Natural-language endpoint with validated LLM fallback (R9)
+How a question is answered:
 
-`POST /v1/evaluations/natural-language` `{"question": "..."}`
-
-1. Try `NaturalLanguage.TryTranslate`. On success `interpreter` is `rules`.
-2. Otherwise, if an LLM is configured (`Llm:Endpoint`, OpenAI-compatible, e.g. local Ollama), ask it
-   for `{"expression": "..."}`; `interpreter` is `llm`.
-3. The candidate must be ≤ 1,000 characters and pass `Expression.Parse`; only then is it evaluated.
-
-Seam and limits: the LLM fallback is used only when an `IChatClient` (Microsoft.Extensions.AI) is
-registered — the app registers one when `Llm:Endpoint` and `Llm:Model` are configured; tests register
-a fake. The LLM is asked for a JSON object `{"expression": "..."}`; anything else is Uninterpretable.
-`question` follows the same request rules as F7 (400 for missing/non-string/unknown members, 422
-`InputTooLong` over 1,000 characters). An LLM failure (exception or timeout) is a 503 Problem Details,
-never a 500, and never falls back to evaluating raw model text.
-Parser errors on an interpreted expression report `position`/`length` within `interpretedExpression`
-(not within the question). The LLM timeout is configured with `Llm:TimeoutSeconds` (default 10).
-
-More rules (after review):
-
-- Configuring `Llm:Endpoint` + `Llm:Model` without an API key is valid (local Ollama); rules-path
-  questions still return 200 and an unreachable LLM returns 503 — never 500.
-- A malformed `Llm:Endpoint` fails application startup (options validation), not individual requests.
-- The question is sent only as a user-role message; the system prompt treats it as untrusted data and
-  instructs the model never to compute, simplify or rearrange, returning `{"expression": null}` for
-  anything needing grouping, powers, percentages or functions.
-- A 422 for an interpreted expression includes `interpretedExpression` and `interpreter` so clients can
-  map `position`/`length`.
-- An over-long question says "A question may have at most 1000 characters." The Uninterpretable
-  detail asks the user to rephrase and does not reveal configuration keys.
-- 429 responses carry `Retry-After`. Model calls are capped (max output tokens, no client retries).
-- The API key is never stored in committed configuration (user-secrets / `Llm__ApiKey`).
+1. If `NaturalLanguage.TryTranslate` succeeds, the result has `interpreter` set to `rules`.
+2. Otherwise, if an `IChatClient` is registered, the model is asked for `{"expression": "..."}`, and
+   the result has `interpreter` set to `llm`. The app registers a client when `Llm:Endpoint` and
+   `Llm:Model` are set (any OpenAI-compatible server, such as a local Ollama). Tests register a fake.
+3. The candidate expression must be non-blank, at most 1,000 characters, contain only digits, `.`,
+   whitespace and `+ - * / × ÷ −`, and pass `Expression.Parse`. Only then is it evaluated. Anything
+   else is `Uninterpretable`, so the endpoint cannot act as a general model proxy.
 
 | Case | Response |
-|------|----------|
+| ---- | -------- |
 | `What is 10 minus 2 multiplied by 6 divided by 4?` | 200 `{"interpretedExpression":"10 - 2 * 6 / 4","result":"7","interpreter":"rules"}` |
-| rules fail, no LLM configured | 422 `errorCode` `Uninterpretable` with a hint |
-| fake LLM returns `{"expression":"3 * 4"}` | 200, `interpreter` `llm`, result `12` |
-| fake LLM returns prompt-injection text, C# code, SQL, an oversized string, non-JSON, or an empty expression | 422 `Uninterpretable` or the parser's error; nothing is evaluated |
-| more than 30 requests per minute from one client | 429 |
+| The rules fail and no model is configured | 422 `Uninterpretable`, with a hint to rephrase |
+| The fake model returns `{"expression":"3 * 4"}` | 200, `interpreter` `llm`, result `12` |
+| The fake model returns an injection, code, SQL, prose, non-JSON, oversized output or an empty expression | 422 `Uninterpretable` or the parser's error; nothing is evaluated |
+| The model throws or times out | 503 Problem Details; never 500, and never raw model text |
+| More than 30 requests per minute from one client, or more than 4 concurrent model calls | 429 with `Retry-After` |
+
+Rules:
+
+- `question` follows the F7 request rules: 400 for a missing or non-string value or unknown members,
+  and 422 `InputTooLong` over 1,000 characters.
+- A 422 for an interpreted expression includes `interpretedExpression` and `interpreter`. Its
+  `position` and `length` refer to that expression, not to the question.
+- The question is sent only as a user-role message. The system prompt treats it as untrusted data,
+  forbids computing, simplifying or rearranging, and requires `{"expression": null}` for unsupported
+  questions.
+- Model calls are capped: a maximum number of output tokens and no retries. `Llm:TimeoutSeconds`
+  defaults to 10.
+- `Llm:Endpoint` and `Llm:Model` without an API key is a valid setup, for example a local Ollama. A
+  malformed or non-HTTP endpoint stops the app at startup.
+- Error details never reveal configuration keys. The API key is kept in user-secrets or in the
+  `Llm__ApiKey` environment variable.

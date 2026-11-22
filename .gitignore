@@ -4,7 +4,7 @@
 ## Get latest from `dotnet new gitignore`
 
 # dotenv files
-.env
+.env*
 
 # User-specific files
 *.rsuser
@@ -487,3 +487,6 @@ private/
 *.pdf
 !docs/DESIGN.pdf
 !.claude/skills/publish/
+
+# Local publish output
+out/

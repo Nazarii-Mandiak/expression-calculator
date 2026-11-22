@@ -1,3 +1,4 @@
+using System.ClientModel;
 using System.Text.Json;
 
 using Calculator.Core;
@@ -70,7 +71,8 @@ internal sealed partial class ExpressionInterpreter(
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            LogLlmFailure(ex);
+            // Not the exception itself: provider error bodies may echo the prompt.
+            LogLlmFailure(ex.GetType().Name, (ex as ClientResultException)?.Status);
             return new Interpretation(InterpretationStatus.LlmUnavailable);
         }
 
@@ -79,7 +81,10 @@ internal sealed partial class ExpressionInterpreter(
             : new Interpretation(InterpretationStatus.Uninterpretable);
     }
 
-    // Strict on purpose: anything but {"expression": "<non-blank text of at most 1,000 chars>"} is rejected.
+    private const string ArithmeticSymbols = " \t+-*/×÷−.";
+
+    // Strict on purpose: anything but {"expression": "<non-blank arithmetic text of at most 1,000 chars>"} is rejected,
+    // so the endpoint cannot be used as a general-purpose LLM proxy.
     private static bool TryReadExpression(string reply, out string expression)
     {
         expression = "";
@@ -91,7 +96,8 @@ internal sealed partial class ExpressionInterpreter(
                 && property.ValueKind == JsonValueKind.String
                 && property.GetString() is { } text
                 && !string.IsNullOrWhiteSpace(text)
-                && text.Length <= ResponseMapper.MaxExpressionLength)
+                && text.Length <= ResponseMapper.MaxExpressionLength
+                && text.All(c => char.IsAsciiDigit(c) || ArithmeticSymbols.Contains(c)))
             {
                 expression = text;
                 return true;
@@ -108,6 +114,6 @@ internal sealed partial class ExpressionInterpreter(
     [LoggerMessage(Level = LogLevel.Warning, Message = "The LLM request timed out.")]
     private partial void LogLlmTimeout();
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The LLM request failed.")]
-    private partial void LogLlmFailure(Exception exception);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The LLM request failed: {ErrorType} (HTTP status {Status}).")]
+    private partial void LogLlmFailure(string errorType, int? status);
 }

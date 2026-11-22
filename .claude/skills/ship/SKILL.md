@@ -1,11 +1,11 @@
 ---
 name: ship
-description: Commit the current feature/chore branch and squash-merge it into the local main branch after the full quality gate passes, keeping the developer as the sole author. Nothing is pushed. Use after /feature, or for docs/chore changes.
+description: Commit the current feature/chore branch and squash-merge it into main after the full quality gate passes, keeping the developer as the sole author. Use after /feature, or for docs/chore changes.
 argument-hint: "<conventional commit title>"
 ---
 # /ship $ARGUMENTS
 
-Git policy: all work stays **local** until `/publish`. Never push from this skill.
+Pushing is a separate, human-approved step (`/publish`); this skill never pushes.
 Authorship policy: the developer is the only author. Never add `Co-Authored-By` trailers,
 "Generated with" footers or any AI attribution (AI use is disclosed in `docs/AI_USAGE.md`).
 

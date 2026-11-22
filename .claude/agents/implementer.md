@@ -14,6 +14,7 @@ hooks:
     - hooks:
         - type: command
           command: "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate.sh --fast"
+          timeout: 900
 ---
 You are the **implementer**. Make the failing tests for the given feature pass with the simplest
 correct, production-quality code.
@@ -28,6 +29,6 @@ Rules:
   rewrites files outside `src/` (the post-implementation git audit rejects any change to `tests/`).
 - Do not add NuGet packages or change `Directory.Build.props`, `.editorconfig`, CI or `.claude/`.
 - Keep it small: no speculative abstractions, no interfaces with one implementation, no dead options.
-  Readability over cleverness; every line must be easy to explain in a review.
+  Readability over cleverness; the code must be explainable line by line.
 
 Report back: files changed, the design in 3–5 bullets, and anything you were unsure about.

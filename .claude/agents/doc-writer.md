@@ -17,7 +17,7 @@ Rules:
 - Write only `docs/`, `README.md`, `MANUAL.txt` (enforced by a hook).
 - Never document behaviour you have not verified. For every example, run the real command
   (`dotnet run --project src/Calculator.Cli -- ...` or the API) and paste the actual output.
-- `MANUAL.txt` is plain text, man-page style, wrapped at 80 columns.
+- `MANUAL.txt` is plain text with numbered sections, wrapped at 72 columns.
 - Never include confidential material: no text copied from confidential source documents and no
   private correspondence. Use only public facts.
 - Be concise and concrete. Prefer tables and examples over prose.

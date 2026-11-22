@@ -18,5 +18,14 @@ internal sealed class LlmOptions
     [Range(1, 120)]
     public int TimeoutSeconds { get; set; } = 10;
 
+    /// <summary>Whether <see cref="Endpoint"/> is an absolute http or https URI.</summary>
+    public bool HasHttpEndpoint =>
+        Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+
+    /// <summary>Whether the key, if any, is only sent over https or to a loopback host.</summary>
+    public bool KeyTravelsSafely =>
+        string.IsNullOrWhiteSpace(ApiKey)
+        || (Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || uri.IsLoopback));
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Endpoint) && !string.IsNullOrWhiteSpace(Model);
 }

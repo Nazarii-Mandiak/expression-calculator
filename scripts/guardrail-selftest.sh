@@ -24,8 +24,14 @@ check "test-author cannot edit src/"              deny  "$(decision "$(edit test
 check "test-author can edit tests/"               allow "$(decision "$(edit test-author tests/Calculator.Core.Tests/X.cs | $H/path-guard.sh tests/)")"
 check "doc-writer cannot edit src/"               deny  "$(decision "$(edit doc-writer src/Calculator.Cli/Program.cs | $H/path-guard.sh docs/ README.md MANUAL.txt)")"
 
+check "'..' paths are denied"                       deny  "$(decision "$(edit implementer 'src/../tests/X.cs' | $H/path-guard.sh src/)")"
+check "paths outside the project are denied"       deny  "$(jq -n '{agent_type:"implementer",tool_input:{file_path:"/etc/passwd"}}' | $H/path-guard.sh src/ | jq -r .hookSpecificOutput.permissionDecision)"
+
 echo "Dependency gate (dependency-gate.sh)"
 check "editing Directory.Packages.props asks a human" ask   "$(decision "$(edit "" Directory.Packages.props | $H/dependency-gate.sh)")"
+check "editing Directory.Build.props asks"         ask   "$(decision "$(edit "" Directory.Build.props | $H/dependency-gate.sh)")"
+check "editing nuget.config asks"                  ask   "$(decision "$(edit "" nuget.config | $H/dependency-gate.sh)")"
+check "editing a csproj asks"                      ask   "$(decision "$(edit "" src/Calculator.Core/Calculator.Core.csproj | $H/dependency-gate.sh)")"
 check "editing other files is unaffected"             allow "$(decision "$(edit "" src/Calculator.Core/Lexer.cs | $H/dependency-gate.sh)")"
 
 echo "Commit gate (gate.sh)"
@@ -35,6 +41,8 @@ probe=tests/Calculator.Core.Tests/GuardrailProbe.cs
 printf 'namespace Calculator.Core.Tests;\n\npublic class GuardrailProbe\n{\n    [Fact]\n    public void Fails() => Assert.Equal(1, 2);\n}\n' > "$probe"
 bash_cmd "git commit -m probe" | $H/gate.sh --fast --only "git commit" >/dev/null 2>&1
 check "commit is blocked while a test fails"      2 "$?"
+bash_cmd "git -C . commit -m probe" | $H/gate.sh --fast --only "git commit" >/dev/null 2>&1
+check "'git -C . commit' is also gated"            2 "$?"
 rm -f "$probe"
 bash_cmd "git commit -m probe" | $H/gate.sh --fast --only "git commit" >/dev/null 2>&1
 check "commit is allowed when green"              0 "$?"

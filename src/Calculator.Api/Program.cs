@@ -7,6 +7,7 @@ using System.Threading.RateLimiting;
 using Calculator.Api;
 
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 
@@ -31,9 +32,8 @@ var llm = builder.Configuration.GetSection("Llm").Get<LlmOptions>() ?? new LlmOp
 builder.Services.AddOptions<LlmOptions>()
     .BindConfiguration("Llm")
     .ValidateDataAnnotations()
-    .Validate(
-        o => !o.IsConfigured || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out _),
-        "Llm:Endpoint must be an absolute URI")
+    .Validate(o => !o.IsConfigured || o.HasHttpEndpoint, "Llm:Endpoint must be an absolute http or https URI")
+    .Validate(o => !o.IsConfigured || o.KeyTravelsSafely, "Llm:Endpoint must use https when Llm:ApiKey is set and the host is not loopback")
     .ValidateOnStart();
 if (llm.IsConfigured)
 {
@@ -57,14 +57,22 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = (context, _) =>
     {
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-        {
-            context.HttpContext.Response.Headers.RetryAfter =
-                ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
-        }
+        // The concurrency cap has no window to report, so it falls back to one second: a busy slot frees up quickly.
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var window) ? window : TimeSpan.FromSeconds(1);
+        context.HttpContext.Response.Headers.RetryAfter =
+            ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
 
         return ValueTask.CompletedTask;
     };
+    // Chained with the per-client policy below. Caps the whole natural-language endpoint, not just the LLM calls:
+    // rules-path requests finish in microseconds, so in practice only requests waiting on the LLM ever hold a permit.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName
+            == EvaluationEndpoints.NaturalLanguageRateLimit
+            ? RateLimitPartition.GetConcurrencyLimiter(
+                EvaluationEndpoints.NaturalLanguageRateLimit,
+                _ => new ConcurrencyLimiterOptions { PermitLimit = 4, QueueLimit = 0 })
+            : RateLimitPartition.GetNoLimiter(""));
     options.AddPolicy(
         EvaluationEndpoints.NaturalLanguageRateLimit,
         context => RateLimitPartition.GetFixedWindowLimiter(

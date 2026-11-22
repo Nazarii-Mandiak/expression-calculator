@@ -21,10 +21,15 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.302
+      # global.json accepts any .NET 10 SDK so reviewers can build with what they have. CI pins the exact SDK
+      # because Core's lock file records the SDK-matched Microsoft.NET.ILLink.Tasks and restore runs in locked mode.
+      - name: Pin the SDK
+        shell: bash
+        run: echo '{"sdk":{"version":"10.0.302","rollForward":"disable"}}' > global.json
       - name: Quality gate
         shell: bash
         run: scripts/verify.sh --full

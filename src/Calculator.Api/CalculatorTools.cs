@@ -55,7 +55,7 @@ public sealed class CalculatorTools
 
         if (expression.Length > ResponseMapper.MaxExpressionLength)
         {
-            throw new McpException($"InputTooLong at index {ResponseMapper.MaxExpressionLength} (length {expression.Length}, zero-based): {ResponseMapper.TooLongMessage}");
+            throw new McpException($"InputTooLong at index {ResponseMapper.MaxExpressionLength} (length {expression.Length - ResponseMapper.MaxExpressionLength}, zero-based): {ResponseMapper.TooLongMessage}");
         }
     }
 }

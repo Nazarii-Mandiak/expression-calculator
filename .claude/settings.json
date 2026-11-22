@@ -45,7 +45,8 @@
             "type": "command",
             "if": "Bash(git commit *)",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate.sh --auto --only \"git commit\"",
-            "statusMessage": "Quality gate: tests must pass to commit (full gate on main)"
+            "statusMessage": "Quality gate: tests must pass to commit (full gate on main)",
+            "timeout": 900
           }
         ]
       },

@@ -63,7 +63,7 @@ internal static class EvaluationEndpoints
         // Checked before interpreting so an oversized question never reaches the LLM.
         if (request.Question.Length > ResponseMapper.MaxExpressionLength)
         {
-            return TooLong(request.Question, "A question may have at most 1000 characters.");
+            return TooLong(request.Question, $"A question may have at most {ResponseMapper.MaxExpressionLength} characters.");
         }
 
         var interpretation = await interpreter.InterpretAsync(request.Question, cancellationToken);

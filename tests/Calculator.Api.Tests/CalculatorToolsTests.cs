@@ -131,4 +131,30 @@ public sealed class CalculatorToolsTests
         Assert.Equal(expectedLength, response.Error.Length);
         Assert.False(string.IsNullOrWhiteSpace(response.Error.Message));
     }
+
+    [Fact]
+    [Trait("Requirement", "R9")]
+    [Trait("Requirement", "R5")]
+    [Trait("Feature", "Hardening")]
+    public void EvaluateExpression_1005Characters_ThrowsMcpExceptionWithInputTooLongAtIndex1000Length5()
+    {
+        var exception = Assert.Throws<McpException>(() => CalculatorTools.EvaluateExpression(new string('1', 1005)));
+
+        Assert.Contains("InputTooLong", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("index 1000", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("length 5", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Requirement", "R9")]
+    [Trait("Requirement", "R5")]
+    [Trait("Feature", "Hardening")]
+    public void ValidateExpression_1005Characters_ThrowsMcpExceptionWithInputTooLongAtIndex1000Length5()
+    {
+        var exception = Assert.Throws<McpException>(() => CalculatorTools.ValidateExpression(new string('1', 1005)));
+
+        Assert.Contains("InputTooLong", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("index 1000", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("length 5", exception.Message, StringComparison.Ordinal);
+    }
 }

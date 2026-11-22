@@ -395,4 +395,60 @@ public sealed class NaturalLanguageEndpointTests(ProductionApiFactory factory) :
         Assert.Equal(HttpStatusCode.OK, response.Status);
         Assert.True(response.Json.GetProperty("paths").TryGetProperty(Path, out _));
     }
+
+    // --- Hardening (whole-repository review) ---
+
+    [Theory]
+    [Trait("Requirement", "R9")]
+    [Trait("Requirement", "R5")]
+    [Trait("Feature", "Hardening")]
+    [InlineData("Once upon a time there was a calculator")]
+    [InlineData("3 * 4 # comment")]
+    public async Task NaturalLanguage_LlmExpressionHasCharacterOutsideArithmetic_Returns422UninterpretableWithoutEchoingIt(string expression)
+    {
+        var response = await ClientWith(FakeChatClient.Replying(LlmReply(expression))).PostRawAsync(Path, Question(LlmQuestion));
+
+        AssertProblem(response, HttpStatusCode.UnprocessableEntity);
+        Assert.Equal("Uninterpretable", response.Json.GetProperty("errorCode").GetString());
+        Assert.False(response.Json.TryGetProperty("interpretedExpression", out _));
+        Assert.DoesNotContain(expression, response.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Requirement", "R9")]
+    [Trait("Feature", "Hardening")]
+    public async Task NaturalLanguage_NonHttpLlmEndpoint_FailsStartupMentioningLlmEndpoint()
+    {
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => factory.WithWebHostBuilder(b => b
+                .UseSetting("Llm:Endpoint", "ftp://example.com/v1")
+                .UseSetting("Llm:Model", "test-model"))
+            .CreateClient()
+            .PostRawAsync(Path, Question("what's 3 plus 4")));
+
+        Assert.Contains("Llm:Endpoint", exception.ToString());
+    }
+
+    [Fact]
+    [Trait("Requirement", "R9")]
+    [Trait("Requirement", "R5")]
+    [Trait("Feature", "Hardening")]
+    public async Task NaturalLanguage_SixConcurrentLlmRequestsWhileLlmBusy_RejectsSomeWith429AndServesOthers()
+    {
+        // Cap is 4 concurrent LLM calls; 6 requests stay under the per-client window (30/min).
+        var fake = FakeChatClient.Delaying(TimeSpan.FromSeconds(2), """{"expression":"3 * 4"}""");
+        using var isolatedFactory = new ProductionApiFactory();
+        var client = isolatedFactory
+            .WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IChatClient>(fake)))
+            .CreateClient();
+
+        var responses = await Task.WhenAll(
+                Enumerable.Range(0, 6).Select(_ => client.PostRawAsync(Path, Question(LlmQuestion))))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Contains(responses, r => r.Status == HttpStatusCode.TooManyRequests);
+        Assert.Contains(responses, r => r.Status == HttpStatusCode.OK);
+        var limited = responses.First(r => r.Status == HttpStatusCode.TooManyRequests);
+        Assert.Equal("application/problem+json", limited.MediaType);
+        Assert.Equal(429, limited.Json.GetProperty("status").GetInt32());
+    }
 }
